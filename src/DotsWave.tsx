@@ -13,9 +13,10 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
   const { geometry, gridWidth, gridHeight } = useMemo(() => {
     const positions: number[] = []
     
-    // Calculate grid dimensions based on viewport
-    const width = Math.ceil(viewport.width / spacing)
-    const height = Math.ceil((viewport.height * 0.6) / spacing)
+    // Calculate grid dimensions based on viewport, with extra padding to hide edges
+    const padding = 5 // Extra dots beyond viewport edges
+    const width = Math.ceil(viewport.width / spacing) + padding * 2
+    const height = Math.ceil((viewport.height * 0.6) / spacing) + padding * 2
     
     // Create a grid of points
     for (let y = 0; y < height; y++) {

@@ -14,9 +14,9 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
     const positions: number[] = []
     
     // Calculate grid dimensions based on viewport, with extra padding to hide edges
-    const padding = 5 // Extra dots beyond viewport edges
+    const padding = 10 // Extra dots beyond viewport edges
     const width = Math.ceil(viewport.width / spacing) + padding * 2
-    const height = Math.ceil((viewport.height * 0.6) / spacing) + padding * 2
+    const height = Math.ceil((viewport.height * 0.4) / spacing) + padding * 2
     
     // Create a grid of points
     for (let y = 0; y < height; y++) {
@@ -44,7 +44,6 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
     
     // Wave parameters
     const waveSpeed = 1.5
-    const waveFrequency = 1.5
     const waveAmplitude = 1.5
     
     for (let y = 0; y < gridHeight; y++) {
@@ -54,9 +53,18 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
         const posX = positions[index]
         const posY = positions[index + 1]
         
-        // Create ripple effect using sine waves
-        const distance = Math.sqrt(posX * posX + posY * posY) * 0.2
-        const wave = Math.sin(distance * waveFrequency - time * waveSpeed) * waveAmplitude
+        // Create asymmetric wave by combining multiple sine waves with different directions
+        // Horizontal wave component
+        const waveX = Math.sin(posX * 0.3 - time * waveSpeed) * waveAmplitude
+        
+        // Vertical wave component with different frequency
+        const waveY = Math.sin(posY * 0.4 + time * waveSpeed * 0.7) * waveAmplitude * 0.8
+        
+        // Diagonal wave component to break symmetry
+        const waveDiagonal = Math.sin((posX * 0.2 + posY * 0.25) - time * waveSpeed * 1.2) * waveAmplitude * 0.6
+        
+        // Combine all wave components
+        const wave = waveX + waveY + waveDiagonal
         
         positions[index + 2] = wave
       }

@@ -14,9 +14,11 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
     const positions: number[] = []
     
     // Calculate grid dimensions based on viewport, with extra padding to hide edges
-    const padding = 20 // Extra dots beyond viewport edges
+    const padding = 20 // Extra dots beyond viewport edges to hide wave boundaries
     const width = Math.ceil(viewport.width / spacing) + padding * 2
-    const height = Math.ceil((viewport.height * 0.1) / spacing) + padding * 2
+    // Grid height: make visible column spacing be 5% of viewport height
+    const visibleGridHeight = viewport.height * 0.05
+    const height = Math.ceil(visibleGridHeight / spacing) + padding * 2
     
     // Create a grid of points
     for (let y = 0; y < height; y++) {
@@ -54,21 +56,21 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
         const posY = positions[index + 1]
         
         // Create asymmetric wave by combining multiple sine waves with different directions
-        // Primary horizontal wave component (reduced frequency for fewer waves)
-        const waveX = Math.sin(posX * 0.15 - time * waveSpeed) * waveAmplitude
+        // Primary wave component traveling left to right (based on x position)
+        const waveX = 0 // No x-axis movement
         
-        // Vertical wave component with different frequency and stronger amplitude
-        const waveY = Math.sin(posY * 0.2 + time * waveSpeed * 0.7) * waveAmplitude * 1.2
+        // Vertical wave component - points move up/down based on x position as wave travels
+        const waveY = Math.sin(posX * 0.2 - time * waveSpeed) * waveAmplitude * 1.6
         
-        // Diagonal wave component to break symmetry (reduced influence)
-        const waveDiagonal = Math.sin((posX * 0.1 + posY * 0.15) - time * waveSpeed * 1.2) * waveAmplitude * 0.3
+        // Diagonal wave component to break symmetry (only use x position)
+        const waveDiagonal = Math.sin(posX * 0.15 - time * waveSpeed * 1.2) * waveAmplitude * 0.3
         
-        // Add entropy with subtle noise-like variation based on position (reduced influence)
-        const noiseX = Math.sin(posX * 0.8 + posY * 0.3) * 0.3
-        const noiseY = Math.cos(posY * 0.6 - posX * 0.4) * 0.25
+        // Add entropy with subtle noise-like variation based on position
+        const noiseX = 0 // No x-axis entropy
+        const noiseY = Math.sin(posX * 0.6) * 0.25
         const entropy = (noiseX + noiseY) * waveAmplitude * 0.2
         
-        // Combine all wave components with entropy
+        // Combine all wave components with entropy - wave travels left to right
         const wave = waveX + waveY + waveDiagonal + entropy
         
         positions[index + 2] = wave

@@ -1,9 +1,10 @@
 import './App.css'
+import { DotsWave } from './DotsWave'
 
 function App() {
   return (
     <div className="container">
-      <canvas id="canvas"></canvas>
+      <DotsWave />
     </div>
   )
 }

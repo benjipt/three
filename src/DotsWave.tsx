@@ -64,8 +64,8 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     // A fixed-speed left-to-right carrier whose local amplitude is shaped
     // by a set of moving envelopes (“boids”) that fly in lanes across X,
     // influencing nearby points with smooth falloff. Displacement is z-only.
-    const speed = 0.8; // consistent LR speed
-    const baseAmp = 8.6; // overall vertical displacement scale
+    const speed = 1.0; // consistent LR speed
+    const baseAmp = 3.6; // overall vertical displacement scale
     const carrierFreq = 0.16; // spatial frequency along X
 
     // Boid lanes (Y positions) and initial phases
@@ -144,8 +144,8 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
 
         if (sizes) {
           // Make subtle size modulation based on crest (bigger for crests)
-          const basePixel = 0.8; // baseline pixel size
-          const sizeBoost = 1.2; // maximum extra multiplier for crests
+          const basePixel = 1.0; // baseline pixel size
+          const sizeBoost = 1.4; // maximum extra multiplier for crests
           const absD = Math.abs(disp);
           const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
           sizes[index / 3] = basePixel * (1 + crest * sizeBoost);
@@ -203,7 +203,7 @@ export function DotsWave() {
     <Canvas
       camera={{ position: [0, 40, 10], far: 1000 }}
       style={{ width: '100%', height: '100%' }}>
-      <DotsGrid spacing={0.5} baseOpacity={1.0} brightness={0.25} />
+      <DotsGrid spacing={0.5} baseOpacity={0.8} brightness={0.6} />
     </Canvas>
   );
 }

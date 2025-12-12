@@ -230,7 +230,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
 export function DotsWave() {
   return (
     <Canvas
-      camera={{ position: [0, 50, 10], far: 1000 }}
+      camera={{ position: [0, 50, 20], far: 1000 }}
       gl={{
         antialias: true, // MSAA is cheap on modern hardware; more efficient than post-process AA
         preserveDrawingBuffer: false, // Disabled unless needed for canvas capture

@@ -10,7 +10,8 @@ interface DotsWaveProps {
 
 function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsWaveProps) {
   const pointsRef = useRef<THREE.Points>(null);
-  const { viewport } = useThree();
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const { viewport, gl } = useThree();
 
   const { geometry, gridWidth, gridHeight } = useMemo(() => {
     const positions: number[] = [];
@@ -70,7 +71,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
 
     // Boid lanes (Y positions) and initial phases
     const lanes = [-6.0, -2.0, 2.0, 6.0];
-    const lanePhase = lanes.map((_, i) => i * 0.7);
+    const lanePhase = lanes.map((_, i) => i * 3.6);
 
     // Each boid moves left-to-right with slight lane wiggle
     const boidCountPerLane = 3;
@@ -144,8 +145,8 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
 
         if (sizes) {
           // Make subtle size modulation based on crest (bigger for crests)
-          const basePixel = 1.0; // baseline pixel size
-          const sizeBoost = 1.4; // maximum extra multiplier for crests
+          const basePixel = 1.2; // baseline pixel size
+          const sizeBoost = 1.8; // maximum extra multiplier for crests
           const absD = Math.abs(disp);
           const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
           sizes[index / 3] = basePixel * (1 + crest * sizeBoost);
@@ -158,6 +159,11 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
       pointsRef.current.geometry.attributes.color.needsUpdate = true;
     if (pointsRef.current.geometry.attributes.size)
       pointsRef.current.geometry.attributes.size.needsUpdate = true;
+
+    // Update DPR uniform for consistent rendering across devices (no object creation)
+    if (matRef.current?.uniforms?.uPixelRatio) {
+      matRef.current.uniforms.uPixelRatio.value = gl.getPixelRatio();
+    }
   });
 
   return (
@@ -191,6 +197,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
            }`
         }
         uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 }, uOpacity: { value: baseOpacity }, uBrightness: { value: brightness } }}
+        ref={matRef}
         transparent
         depthWrite={false}
       />
@@ -201,7 +208,15 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
 export function DotsWave() {
   return (
     <Canvas
-      camera={{ position: [0, 40, 10], far: 1000 }}
+      camera={{ position: [0, 50, 10], far: 1000 }}
+      gl={{
+        antialias: true, // MSAA is cheap on modern hardware; more efficient than post-process AA
+        preserveDrawingBuffer: false, // Disabled unless needed for canvas capture
+        alpha: false, // No transparency in the canvas itself; handled in shaders
+        stencil: false, // Not needed for our scene
+        depth: true, // We use depth for perspective
+        powerPreference: 'high-performance', // Prefer high-performance GPU on multi-GPU systems
+      }}
       style={{ width: '100%', height: '100%' }}>
       <DotsGrid spacing={0.5} baseOpacity={0.8} brightness={0.6} />
     </Canvas>

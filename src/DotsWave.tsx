@@ -130,11 +130,25 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
             let boidCenterX = -40 + drift + (bi * boidSpacingX) + time * (speed * 12 * boidSpeedVar) + li * 3.0 + boidPhaseOffset;
             // Wrap boids horizontally so they loop continuously (viewport width ~80)
             boidCenterX = boidCenterX % 160 - 80; // Wrap within visible range
+            
+            // Smooth fade-in/fade-out near edges to avoid abrupt entry/exit
+            const edgeFadeZone = 15.0; // distance from edge to start fading
+            const leftEdge = -80;
+            const rightEdge = 80;
+            let edgeFade = 1.0;
+            if (boidCenterX < leftEdge + edgeFadeZone) {
+              // Fade in from left
+              edgeFade = Math.max(0, (boidCenterX - leftEdge) / edgeFadeZone);
+            } else if (boidCenterX > rightEdge - edgeFadeZone) {
+              // Fade out toward right
+              edgeFade = Math.max(0, (rightEdge - boidCenterX) / edgeFadeZone);
+            }
+            
             const dx = posX - boidCenterX;
             const dy = posY - laneY;
             const gx = Math.exp(-(dx * dx) / (2 * boidInfluenceSigmaX * boidInfluenceSigmaX * boidSigmaVar));
             const gy = Math.exp(-(dy * dy) / (2 * boidInfluenceSigmaY * boidInfluenceSigmaY * boidSigmaVar));
-            const influence = gx * gy; // elliptical Gaussian envelope with variable shape
+            const influence = gx * gy * edgeFade; // Apply edge fade to smooth entry/exit
             localAmp += baseAmp * boidAmp * influence * boidRamp; // Apply ramp-in factor
           }
         }

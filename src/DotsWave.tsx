@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -19,6 +19,26 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const { viewport, gl } = useThree();
+
+  // Mobile detection state with responsive update
+  const [, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Check if viewport is mobile-sized
+    const checkIsMobile = () => {
+      const mobileBreakpoint = 768; // Standard mobile breakpoint in pixels
+      setIsMobile(window.innerWidth < mobileBreakpoint);
+    };
+
+    // Initial check
+    checkIsMobile();
+
+    // Listen for window resize events to update state
+    window.addEventListener('resize', checkIsMobile);
+
+    // Cleanup listener on unmount
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
 
   const { geometry, gridWidth, gridHeight } = useMemo(() => {
     const positions: number[] = [];

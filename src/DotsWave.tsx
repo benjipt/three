@@ -47,6 +47,43 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
     // Wave parameters
     const waveSpeed = 1.2
     const waveAmplitude = 3.5
+    const cycleDuration = 4 // seconds for each waveform
+    const transitionDuration = 0.5 // seconds for smooth transition between waveforms
+    
+    // Calculate which waveform we're on and transition progress
+    const totalCycleDuration = cycleDuration * 3
+    const cycleTime = time % totalCycleDuration
+    const currentWaveIndex = Math.floor(cycleTime / cycleDuration)
+    const nextWaveIndex = (currentWaveIndex + 1) % 3
+    const timeInCycle = cycleTime % cycleDuration
+    
+    // Calculate blend factor for smooth interpolation (0 = current wave, 1 = next wave)
+    let blendFactor = 0
+    if (timeInCycle > cycleDuration - transitionDuration) {
+      blendFactor = (timeInCycle - (cycleDuration - transitionDuration)) / transitionDuration
+    }
+    
+    // Function to calculate a specific waveform
+    const calculateWaveform = (waveIndex: number, posX: number, time: number): number => {
+      switch (waveIndex) {
+        case 0:
+          // Waveform 1: Smooth, single wave
+          return Math.sin(posX * 0.2 - time * waveSpeed) * waveAmplitude * 1.6
+        case 1:
+          // Waveform 2: Multiple overlapping waves with more complexity
+          const w1 = Math.sin(posX * 0.15 - time * waveSpeed * 0.8) * waveAmplitude * 1.2
+          const w2 = Math.sin(posX * 0.3 - time * waveSpeed * 1.3) * waveAmplitude * 0.8
+          return w1 + w2
+        case 2:
+          // Waveform 3: Asymmetric, jagged pattern
+          const w3 = Math.sin(posX * 0.1 - time * waveSpeed) * waveAmplitude * 1.4
+          const w4 = Math.cos(posX * 0.25 - time * waveSpeed * 1.1) * waveAmplitude * 0.6
+          const w5 = Math.sin(posX * 0.18 - time * waveSpeed * 0.9) * waveAmplitude * 0.5
+          return w3 + w4 + w5
+        default:
+          return 0
+      }
+    }
     
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
@@ -55,25 +92,17 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
         const posX = positions[index]
         const posY = positions[index + 1]
         
-        // Create asymmetric wave by combining multiple sine waves with different directions
-        // Primary wave component traveling left to right (based on x position)
-        const waveX = 0 // No x-axis movement
+        // Calculate current and next waveforms
+        const currentWave = calculateWaveform(currentWaveIndex, posX, time)
+        const nextWave = calculateWaveform(nextWaveIndex, posX, time)
         
-        // Vertical wave component - points move up/down based on x position as wave travels
-        const waveY = Math.sin(posX * 0.2 - time * waveSpeed) * waveAmplitude * 1.6
+        // Blend between waveforms smoothly
+        const blendedWave = currentWave * (1 - blendFactor) + nextWave * blendFactor
         
-        // Diagonal wave component to break symmetry (only use x position)
-        const waveDiagonal = Math.sin(posX * 0.15 - time * waveSpeed * 1.2) * waveAmplitude * 0.3
+        // Add subtle position-based variation to all waveforms
+        const positionVariation = Math.sin(posX * 0.6 + posY * 0.3) * waveAmplitude * 0.15
         
-        // Add entropy with subtle noise-like variation based on position
-        const noiseX = 0 // No x-axis entropy
-        const noiseY = Math.sin(posX * 0.6) * 0.25
-        const entropy = (noiseX + noiseY) * waveAmplitude * 0.2
-        
-        // Combine all wave components with entropy - wave travels left to right
-        const wave = waveX + waveY + waveDiagonal + entropy
-        
-        positions[index + 2] = wave
+        positions[index + 2] = blendedWave + positionVariation
       }
     }
     

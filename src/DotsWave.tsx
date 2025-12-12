@@ -63,7 +63,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const time = clock.getElapsedTime();
     // Envelope Boids
     // A fixed-speed left-to-right carrier whose local amplitude is shaped
-    // by a set of moving envelopes (“boids”) that fly in lanes across X,
+    // by a set of moving envelopes ("boids") that fly in lanes across X,
     // influencing nearby points with smooth falloff. Displacement is z-only.
     const speed = 1.0; // consistent LR speed
     const baseAmp = 3.6; // overall vertical displacement scale
@@ -79,6 +79,10 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const boidInfluenceSigmaX = 5.5; // horizontal falloff
     const boidInfluenceSigmaY = 1.6; // vertical falloff
     const boidAmp = 0.8; // how strongly a boid boosts local amplitude
+    
+    // Ramp up boid influence gradually over first 2 seconds to avoid startup burst
+    const boidRampTime = 2.0;
+    const boidRamp = Math.min(1.0, time / boidRampTime);
 
     // Small global drift to avoid stationary repetition
     const drift = Math.sin(time * 0.05) * 4.0;
@@ -106,13 +110,15 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
           const laneY = lanes[li] + Math.sin(time * 0.25 + lanePhase[li]) * 0.8; // gentle wiggle
           for (let bi = 0; bi < boidCountPerLane; bi++) {
             // Boid X center moves LR with spacing; stagger with lane index and bi
-            const boidCenterX = -40 + drift + (bi * boidSpacingX) + time * (speed * 12) + li * 3.0;
+            let boidCenterX = -40 + drift + (bi * boidSpacingX) + time * (speed * 12) + li * 3.0;
+            // Wrap boids horizontally so they loop continuously (viewport width ~80)
+            boidCenterX = boidCenterX % 160 - 80; // Wrap within visible range
             const dx = posX - boidCenterX;
             const dy = posY - laneY;
             const gx = Math.exp(-(dx * dx) / (2 * boidInfluenceSigmaX * boidInfluenceSigmaX));
             const gy = Math.exp(-(dy * dy) / (2 * boidInfluenceSigmaY * boidInfluenceSigmaY));
             const influence = gx * gy; // elliptical Gaussian envelope
-            localAmp += baseAmp * boidAmp * influence;
+            localAmp += baseAmp * boidAmp * influence * boidRamp; // Apply ramp-in factor
           }
         }
 

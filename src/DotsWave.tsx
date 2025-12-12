@@ -4,9 +4,11 @@ import * as THREE from 'three';
 
 interface DotsWaveProps {
   spacing?: number;
+  baseOpacity?: number;
+  brightness?: number;
 }
 
-function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
+function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsWaveProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const { viewport } = useThree();
 
@@ -142,8 +144,8 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
 
         if (sizes) {
           // Make subtle size modulation based on crest (bigger for crests)
-          const basePixel = 1.4; // baseline pixel size
-          const sizeBoost = 1.8; // maximum extra multiplier for crests
+          const basePixel = 0.8; // baseline pixel size
+          const sizeBoost = 1.2; // maximum extra multiplier for crests
           const absD = Math.abs(disp);
           const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
           sizes[index / 3] = basePixel * (1 + crest * sizeBoost);
@@ -178,15 +180,17 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
           `precision mediump float;
            varying vec3 vColor;
            uniform float uOpacity;
+           uniform float uBrightness;
            void main() {
              vec2 coord = gl_PointCoord - vec2(0.5);
              float r = length(coord);
              float alpha = 1.0 - smoothstep(0.45, 0.5, r);
              if (alpha < 0.01) discard;
-             gl_FragColor = vec4(vColor, alpha * uOpacity);
+             vec3 col = vColor * uBrightness;
+             gl_FragColor = vec4(col, alpha * uOpacity);
            }`
         }
-        uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 }, uOpacity: { value: 1.0 } }}
+        uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 }, uOpacity: { value: baseOpacity }, uBrightness: { value: brightness } }}
         transparent
         depthWrite={false}
       />
@@ -199,7 +203,7 @@ export function DotsWave() {
     <Canvas
       camera={{ position: [0, 40, 10], far: 1000 }}
       style={{ width: '100%', height: '100%' }}>
-      <DotsGrid spacing={0.5} />
+      <DotsGrid spacing={0.5} baseOpacity={1.0} brightness={0.25} />
     </Canvas>
   );
 }

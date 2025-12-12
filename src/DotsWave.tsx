@@ -12,6 +12,11 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
 
   const { geometry, gridWidth, gridHeight } = useMemo(() => {
     const positions: number[] = [];
+    const colors: number[] = [];
+
+    const baseR = 220 / 255;
+    const baseG = 106 / 255;
+    const baseB = 163 / 255;
 
     // Calculate grid dimensions based on viewport, with extra padding to hide edges
     const padding = 30; // Extra dots beyond viewport edges to hide wave boundaries
@@ -28,14 +33,13 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
         const posZ = 0;
 
         positions.push(posX, posY, posZ);
+        colors.push(baseR, baseG, baseB);
       }
     }
 
     const geom = new THREE.BufferGeometry();
-    geom.setAttribute(
-      'position',
-      new THREE.BufferAttribute(new Float32Array(positions), 3)
-    );
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
 
     return { geometry: geom, gridWidth: width, gridHeight: height };
   }, [viewport.width, viewport.height, spacing]);
@@ -46,6 +50,8 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
 
     const positions = pointsRef.current.geometry.attributes.position
       .array as Float32Array;
+    const colors =
+      (pointsRef.current.geometry.attributes.color?.array as Float32Array) ?? null;
     const time = clock.getElapsedTime();
     // Envelope Boids
     // A fixed-speed left-to-right carrier whose local amplitude is shaped
@@ -68,6 +74,14 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
 
     // Small global drift to avoid stationary repetition
     const drift = Math.sin(time * 0.05) * 4.0;
+
+    // Crest color burn + Depth fog band variables
+    const accent = [1.0, 0.65, 0.18]; // warm accent (orange)
+    const fogColor = [0.06, 0.04, 0.03]; // dark fog tint
+    const burnThreshold = baseAmp * 0.35; // displacement at which accent begins
+    const burnRange = baseAmp * 0.9; // span of accent ramp
+    const fogStart = baseAmp * 0.7; // when fog starts to take effect
+    const fogRange = baseAmp * 0.9;
 
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
@@ -95,7 +109,31 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
         }
 
         // Final vertical displacement: carrier modulated by envelope boids
-        positions[index + 2] = Math.sin(phase) * localAmp;
+        const disp = Math.sin(phase) * localAmp;
+        positions[index + 2] = disp;
+
+        if (colors) {
+          // Crest mask (smoothstep-like)
+          const absD = Math.abs(disp);
+          const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
+          // interpolate base -> accent based on crest
+          const baseR = 220 / 255;
+          const baseG = 106 / 255;
+          const baseB = 163 / 255;
+          let r = baseR * (1 - crest) + accent[0] * crest;
+          let g = baseG * (1 - crest) + accent[1] * crest;
+          let b = baseB * (1 - crest) + accent[2] * crest;
+
+          // Fog band: stronger for larger crests (or higher displacement)
+          const fogFactor = Math.max(0, Math.min(1, (absD - fogStart) / fogRange));
+          r = r * (1 - fogFactor) + fogColor[0] * fogFactor;
+          g = g * (1 - fogFactor) + fogColor[1] * fogFactor;
+          b = b * (1 - fogFactor) + fogColor[2] * fogFactor;
+
+          colors[index] = r;
+          colors[index + 1] = g;
+          colors[index + 2] = b;
+        }
       }
     }
 

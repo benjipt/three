@@ -99,8 +99,9 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const fogColor = [0.06, 0.04, 0.03]; // dark fog tint
     const burnThreshold = baseAmp * 0.35; // displacement at which accent begins
     const burnRange = baseAmp * 0.9; // span of accent ramp
-    const fogStart = baseAmp * 0.7; // when fog starts to take effect
-    const fogRange = baseAmp * 0.9;
+    // Make fog subtle: only at extreme peaks, with gentle curve
+    const fogStart = baseAmp * 0.85; // later start -> fewer points receive fog
+    const fogRange = baseAmp * 0.6; // narrower range -> quicker falloff
 
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
@@ -151,11 +152,13 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
           let g = baseG * (1 - crest) + accent[1] * crest;
           let b = baseB * (1 - crest) + accent[2] * crest;
 
-          // Fog band: stronger for larger crests (or higher displacement)
-          const fogFactor = Math.max(0, Math.min(1, (absD - fogStart) / fogRange));
-          r = r * (1 - fogFactor) + fogColor[0] * fogFactor;
-          g = g * (1 - fogFactor) + fogColor[1] * fogFactor;
-          b = b * (1 - fogFactor) + fogColor[2] * fogFactor;
+          // Subtle fog band at extreme crests only
+          let fogFactor = Math.max(0, Math.min(1, (absD - fogStart) / fogRange));
+          // Ease-in curve and cap intensity to keep it subtle
+          fogFactor = Math.pow(fogFactor, 1.5) * 0.35; // max ~35% blend
+          r = r * (1.0 - fogFactor) + fogColor[0] * fogFactor;
+          g = g * (1.0 - fogFactor) + fogColor[1] * fogFactor;
+          b = b * (1.0 - fogFactor) + fogColor[2] * fogFactor;
 
           colors[index] = r;
           colors[index + 1] = g;

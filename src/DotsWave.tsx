@@ -25,9 +25,12 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const colors: number[] = [];
     const sizes: number[] = [];
 
-    const baseR = 220 / 255;
-    const baseG = 106 / 255;
-    const baseB = 163 / 255;
+    // Base color in sRGB, convert to linear for accurate rendering
+    const baseColor = new THREE.Color('#DC6AA3');
+    baseColor.convertSRGBToLinear();
+    const baseR = baseColor.r;
+    const baseG = baseColor.g;
+    const baseB = baseColor.b;
 
     // Calculate grid dimensions based on viewport, with extra padding to hide edges
     const padding = 30; // Extra dots beyond viewport edges to hide wave boundaries
@@ -182,9 +185,16 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     if (pointsRef.current.geometry.attributes.size)
       pointsRef.current.geometry.attributes.size.needsUpdate = true;
 
-    // Update DPR uniform for consistent rendering across devices (no object creation)
-    if (matRef.current?.uniforms?.uPixelRatio) {
-      matRef.current.uniforms.uPixelRatio.value = gl.getPixelRatio();
+    // Update uniforms for DPR and brightness parity on non-retina
+    if (matRef.current?.uniforms) {
+      if (matRef.current.uniforms.uPixelRatio) {
+        matRef.current.uniforms.uPixelRatio.value = gl.getPixelRatio();
+      }
+      if (matRef.current.uniforms.uBrightness) {
+        const dpr = gl.getPixelRatio();
+        const boost = dpr < 1.5 ? 1.08 : 1.0; // subtle brightness lift on standard displays
+        matRef.current.uniforms.uBrightness.value = (brightness ?? 1.0) * boost;
+      }
     }
   });
 
@@ -238,6 +248,13 @@ export function DotsWave() {
         stencil: false, // Not needed for our scene
         depth: true, // We use depth for perspective
         powerPreference: 'high-performance', // Prefer high-performance GPU on multi-GPU systems
+      }}
+      onCreated={({ gl }) => {
+        // Enable sRGB output for near-accurate colors
+        gl.outputEncoding = THREE.sRGBEncoding;
+        // gammaFactor is used by some three.js versions; harmless if ignored in newer builds
+        // @ts-ignore
+        gl.gammaFactor = 2.2;
       }}
       style={{ width: '100%', height: '100%' }}>
       <DotsGrid spacing={0.5} baseOpacity={0.8} brightness={0.6} />

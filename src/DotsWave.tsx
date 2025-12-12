@@ -15,13 +15,13 @@ interface DotsWaveProps {
   brightness?: number;
 }
 
-function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsWaveProps) {
+function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: DotsWaveProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const { viewport, gl } = useThree();
 
   // Mobile detection state with responsive update
-  const [, setIsMobile] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
 
   useEffect(() => {
     // Check if viewport is mobile-sized
@@ -53,7 +53,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const baseB = baseColor.b;
 
     // Calculate grid dimensions based on viewport, with extra padding to hide edges
-    const padding = 30; // Extra dots beyond viewport edges to hide wave boundaries
+    const padding = isMobile ? 15 : 30; // Extra dots beyond viewport edges to hide wave boundaries
     const width = Math.ceil(viewport.width / spacing) + padding * 2;
     // Grid height: make visible column spacing be 5% of viewport height
     const visibleGridHeight = viewport.height * 0.05;
@@ -89,7 +89,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     geom.setAttribute('size', new THREE.BufferAttribute(new Float32Array(sizes), 1));
 
     return { geometry: geom, gridWidth: width, gridHeight: height };
-  }, [viewport.width, viewport.height, spacing]);
+  }, [viewport.width, viewport.height, spacing, isMobile]);
 
   // Animate the wave
   useFrame(({ clock }) => {

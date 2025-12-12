@@ -231,7 +231,7 @@ export function DotsWave() {
   };
 
   const labelStyle: CSSProperties = {
-    color: '#fff',
+    color: '#F6F0E1',
     fontSize: 12,
     minWidth: 60,
   };
@@ -244,7 +244,7 @@ export function DotsWave() {
     width: 60,
     background: 'rgba(255,255,255,0.06)',
     border: '1px solid rgba(255,255,255,0.06)',
-    color: '#fff',
+    color: '#F6F0E1',
     padding: '4px 6px',
     borderRadius: 6,
   };
@@ -257,7 +257,44 @@ export function DotsWave() {
         <DotsGrid spacing={0.5} brightness={brightness} />
       </Canvas>
 
-      <div style={controlPanelStyle}>
+      <div className="dots-controls" style={controlPanelStyle}>
+        <style>{`
+          .dots-controls input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 160px;
+            height: 6px;
+            background: rgba(255,226,153,0.08);
+            border-radius: 6px;
+            outline: none;
+          }
+          .dots-controls input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #FFE299;
+            box-shadow: 0 0 8px rgba(255,226,153,0.8);
+            cursor: pointer;
+            margin-top: -5px;
+          }
+          .dots-controls input[type=range]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #FFE299;
+            box-shadow: 0 0 8px rgba(255,226,153,0.8);
+            cursor: pointer;
+          }
+          .dots-controls input[type=range]::-moz-range-track {
+            height: 6px;
+            background: rgba(255,226,153,0.08);
+            border-radius: 6px;
+          }
+          .dots-controls input[type=number] {
+            color: #F6F0E1;
+          }
+        `}</style>
         <div style={controlRowStyle}>
           <label style={labelStyle}>Opacity</label>
           <input

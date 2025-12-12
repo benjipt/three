@@ -7,11 +7,13 @@ interface DotsWaveProps {
   spacing?: number;
   baseOpacity?: number;
   brightness?: number;
+  heightRatio?: number;
 }
 
-function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
+function DotsGrid({ spacing = 0.6, brightness = 0.9, heightRatio = 0.05 }: DotsWaveProps) {
   const pointsRef = useRef<THREE.Points>(null);
-  const { viewport } = useThree();
+  const matRef = useRef<THREE.ShaderMaterial | null>(null);
+  const { viewport, gl } = useThree();
 
   const { geometry, gridWidth, gridHeight } = useMemo(() => {
     const positions: number[] = [];
@@ -25,8 +27,8 @@ function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
     // Calculate grid dimensions based on viewport, with extra padding to hide edges
     const padding = 30; // Extra dots beyond viewport edges to hide wave boundaries
     const width = Math.ceil(viewport.width / spacing) + padding * 2;
-    // Grid height: make visible column spacing be 5% of viewport height
-    const visibleGridHeight = viewport.height * 0.05;
+    // Grid height: make visible column spacing be a fraction of viewport height
+    const visibleGridHeight = viewport.height * heightRatio;
     const height = Math.ceil(visibleGridHeight / spacing) + padding * 2;
 
     // Create a grid of points
@@ -48,7 +50,7 @@ function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
     geom.setAttribute('size', new THREE.BufferAttribute(new Float32Array(sizes), 1));
 
     return { geometry: geom, gridWidth: width, gridHeight: height };
-  }, [viewport.width, viewport.height, spacing]);
+  }, [viewport.width, viewport.height, spacing, heightRatio]);
 
   // Animate the wave
   useFrame(({ clock }) => {
@@ -164,6 +166,15 @@ function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
       pointsRef.current.geometry.attributes.color.needsUpdate = true;
     if (pointsRef.current.geometry.attributes.size)
       pointsRef.current.geometry.attributes.size.needsUpdate = true;
+
+    // update shader pixel ratio uniform from the renderer so high-DPI looks consistent in production
+    if (matRef.current) {
+      type ShaderMatWithUniforms = THREE.ShaderMaterial & { uniforms: { uPixelRatio: { value: number } } };
+      const mat = matRef.current as ShaderMatWithUniforms;
+      if (mat.uniforms && typeof mat.uniforms.uPixelRatio !== 'undefined') {
+        mat.uniforms.uPixelRatio.value = gl.getPixelRatio();
+      }
+    }
   });
 
   // Note: opacity is controlled via Canvas CSS in the parent for immediate visual response.
@@ -196,6 +207,7 @@ function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
            }`
         }
         uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 } }}
+        ref={(r) => (matRef.current = r as THREE.ShaderMaterial | null)}
         transparent
         depthWrite={false}
       />
@@ -205,8 +217,8 @@ function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
 
 
 export function DotsWave() {
-  const [baseOpacity, setBaseOpacity] = useState(0.78);
-  const [brightness, setBrightness] = useState(0.75);
+  const [baseOpacity, setBaseOpacity] = useState(1.0);
+  const [brightness, setBrightness] = useState(1.0);
 
   const controlPanelStyle: CSSProperties = {
     position: 'absolute',
@@ -253,6 +265,8 @@ export function DotsWave() {
     <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
       <Canvas
         camera={{ position: [0, 40, 10], far: 1000 }}
+        gl={{ antialias: true }}
+        dpr={[1, typeof window !== 'undefined' ? Math.max(1, window.devicePixelRatio || 1) : 1]}
         style={{ width: '100%', height: '100%', opacity: baseOpacity }}>
         <DotsGrid spacing={0.5} brightness={brightness} />
       </Canvas>

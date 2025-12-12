@@ -39,12 +39,23 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const visibleGridHeight = viewport.height * 0.05;
     const height = Math.ceil(visibleGridHeight / spacing) + padding * 2;
 
+    // Taper settings: pronounced compression at edges (vertical rows only)
+    const edgeScale = 0.1; // 90% compression near edges (more pronounced)
+    const taperPower = 1.4; // extends taper influence further toward center
+
     // Create a grid of points
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const posX = (x - width / 2) * spacing;
-        const posY = (y - height / 2) * spacing;
+        let posY = (y - height / 2) * spacing;
         const posZ = 0;
+
+        // Static taper: compress vertical spacing near left/right edges, uniform columns
+        const halfWidthUnits = (width / 2) * spacing;
+        const nx = Math.max(0, Math.min(1, Math.abs(posX) / halfWidthUnits)); // 0 center -> 1 edges
+        const spread = 1.0 - Math.pow(nx, taperPower); // more spread in middle
+        const scaleY = edgeScale + (1.0 - edgeScale) * spread; // edge->edgeScale, center->1.0
+        posY *= scaleY;
 
         positions.push(posX, posY, posZ);
         colors.push(baseR, baseG, baseB);

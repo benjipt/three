@@ -13,6 +13,7 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
   const { geometry, gridWidth, gridHeight } = useMemo(() => {
     const positions: number[] = [];
     const colors: number[] = [];
+    const sizes: number[] = [];
 
     const baseR = 220 / 255;
     const baseG = 106 / 255;
@@ -34,12 +35,14 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
 
         positions.push(posX, posY, posZ);
         colors.push(baseR, baseG, baseB);
+        sizes.push(1.4); // initial pixel size per point
       }
     }
 
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
     geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+    geom.setAttribute('size', new THREE.BufferAttribute(new Float32Array(sizes), 1));
 
     return { geometry: geom, gridWidth: width, gridHeight: height };
   }, [viewport.width, viewport.height, spacing]);
@@ -52,6 +55,8 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
       .array as Float32Array;
     const colors =
       (pointsRef.current.geometry.attributes.color?.array as Float32Array) ?? null;
+    const sizes =
+      (pointsRef.current.geometry.attributes.size?.array as Float32Array) ?? null;
     const time = clock.getElapsedTime();
     // Envelope Boids
     // A fixed-speed left-to-right carrier whose local amplitude is shaped
@@ -134,15 +139,57 @@ function DotsGrid({ spacing = 0.6 }: DotsWaveProps) {
           colors[index + 1] = g;
           colors[index + 2] = b;
         }
+
+        if (sizes) {
+          // Make subtle size modulation based on crest (bigger for crests)
+          const basePixel = 1.4; // baseline pixel size
+          const sizeBoost = 1.8; // maximum extra multiplier for crests
+          const absD = Math.abs(disp);
+          const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
+          sizes[index / 3] = basePixel * (1 + crest * sizeBoost);
+        }
       }
     }
 
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
+    if (pointsRef.current.geometry.attributes.color)
+      pointsRef.current.geometry.attributes.color.needsUpdate = true;
+    if (pointsRef.current.geometry.attributes.size)
+      pointsRef.current.geometry.attributes.size.needsUpdate = true;
   });
 
   return (
     <points ref={pointsRef} geometry={geometry}>
-      <pointsMaterial color="#DC6AA3" size={0.1} sizeAttenuation={false} />
+      <shaderMaterial
+        vertexShader={
+          `attribute float size;
+           attribute vec3 color;
+           varying vec3 vColor;
+           uniform float uPixelRatio;
+           void main() {
+             vColor = color;
+             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+             gl_Position = projectionMatrix * mvPosition;
+             // Keep points a consistent screen size
+             gl_PointSize = max(1.0, size * uPixelRatio);
+           }`
+        }
+        fragmentShader={
+          `precision mediump float;
+           varying vec3 vColor;
+           uniform float uOpacity;
+           void main() {
+             vec2 coord = gl_PointCoord - vec2(0.5);
+             float r = length(coord);
+             float alpha = 1.0 - smoothstep(0.45, 0.5, r);
+             if (alpha < 0.01) discard;
+             gl_FragColor = vec4(vColor, alpha * uOpacity);
+           }`
+        }
+        uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 }, uOpacity: { value: 1.0 } }}
+        transparent
+        depthWrite={false}
+      />
     </points>
   );
 }

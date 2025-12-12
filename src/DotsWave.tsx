@@ -40,8 +40,8 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const height = Math.ceil(visibleGridHeight / spacing) + padding * 2;
 
     // Taper settings: pronounced compression at edges (vertical rows only)
-    const edgeScale = 0.1; // 90% compression near edges (more pronounced)
-    const taperPower = 1.4; // extends taper influence further toward center
+    const edgeScale = 0.06; // 94% compression near edges (more pronounced)
+    const taperPower = 1.1; // extends taper influence further toward center
 
     // Create a grid of points
     for (let y = 0; y < height; y++) {
@@ -86,7 +86,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     // A fixed-speed left-to-right carrier whose local amplitude is shaped
     // by a set of moving envelopes ("boids") that fly in lanes across X,
     // influencing nearby points with smooth falloff. Displacement is z-only.
-    const speed = 1.0; // consistent LR speed
+    const speed = 1.2; // consistent LR speed
     const baseAmp = 3.6; // overall vertical displacement scale
     const carrierFreq = 0.16; // spatial frequency along X
 

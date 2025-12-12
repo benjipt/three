@@ -112,9 +112,9 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
 export function DotsWave() {
   return (
     <Canvas
-      camera={{ position: [0, 0, 30], far: 1000 }}
+      camera={{ position: [0, 40, 10], far: 1000 }}
       style={{ width: '100%', height: '100%' }}>
-      <DotsGrid spacing={0.5} />
+      <DotsGrid spacing={0.4} />
     </Canvas>
   );
 }

@@ -57,6 +57,7 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
     const lfo1 = 0.5 + 0.5 * Math.sin(time * 0.15); // 0..1
     const lfo2 = 0.5 + 0.5 * Math.cos(time * 0.11); // 0..1
     const lfo3 = 0.5 + 0.5 * Math.sin(time * 0.07 + 1.3); // 0..1
+    const lfoY = 0.5 + 0.5 * Math.sin(time * 0.09 + 0.8); // vertical sweep modulator
 
     // Modulated parameters derived from LFOs
     const freqA = 0.12 + lfo1 * 0.12; // varies ~0.12..0.24
@@ -75,15 +76,26 @@ function DotsGrid({ spacing = 0.5 }: DotsWaveProps) {
         const posY = positions[index + 1];
 
         // Single continuous waveform composed of three time-modulated components
-        // Three concurrent left-to-right waves with distinct dynamics
+        // Three concurrent left-to-right waves with distinct dynamics (fixed speed)
         const wA = Math.sin(posX * freqA - time * speed + 0.0) * ampA;
         const wB = Math.sin(posX * freqB - time * speed + 1.3) * ampB; // phase offset
-        const wC = Math.cos(posX * freqC - time * speed + 2.1) * ampC; // different form & phase
+        const wC = Math.sin(posX * freqC - time * speed + 2.1) * ampC; // straight fronts
+
+        // Add top-to-bottom folding via independent vertical sweeps (different speeds)
+        const vFreq1 = 0.45 + lfoY * 0.25;  // vertical band spacing
+        const vFreq2 = 0.22 + lfo2 * 0.18;  // secondary vertical banding
+        const vSpeed1 = 0.65;               // slower than left-to-right
+        const vSpeed2 = 0.95;               // closer to LR but still distinct
+        const vAmp1 = baseAmplitude * (0.45 + lfo1 * 0.30);
+        const vAmp2 = baseAmplitude * (0.35 + lfo3 * 0.25);
+        const wV1 = Math.sin(posY * vFreq1 - time * vSpeed1) * vAmp1;
+        const wV2 = Math.sin(posY * vFreq2 - time * vSpeed2 + 0.9) * vAmp2;
 
         // Subtle position-based variation for extra depth; keeps continuity
         const positionVariation = Math.sin(posX * 0.6 + posY * 0.3) * baseAmplitude * 0.12;
 
-        positions[index + 2] = wA + wB + wC + positionVariation;
+        // Combine LR waves and vertical folds; displacement along z only
+        positions[index + 2] = wA + wB + wC + wV1 + wV2 + positionVariation;
       }
     }
 

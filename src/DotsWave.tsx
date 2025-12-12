@@ -48,7 +48,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
 
         positions.push(posX, posY, posZ);
         colors.push(baseR, baseG, baseB);
-        sizes.push(1.4); // initial pixel size per point
+        sizes.push(1.2); // initial pixel size per point
       }
     }
 
@@ -91,7 +91,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const boidAmp = 0.8; // how strongly a boid boosts local amplitude
 
     // Small global drift to avoid stationary repetition
-    const drift = Math.sin(time * 0.05) * 4.0;
+    const drift = Math.sin(time * 0.05) * 2.0;
 
     // Ramp up boid influence gradually over first 2 seconds to avoid startup burst
     const boidRampTime = 2.0;
@@ -250,14 +250,16 @@ export function DotsWave() {
         powerPreference: 'high-performance', // Prefer high-performance GPU on multi-GPU systems
       }}
       onCreated={({ gl }) => {
-        // Enable sRGB output for near-accurate colors
-        gl.outputEncoding = THREE.sRGBEncoding;
-        // gammaFactor is used by some three.js versions; harmless if ignored in newer builds
-        // @ts-ignore
-        gl.gammaFactor = 2.2;
+        // Prefer SRGB color space for near-accurate colors when supported
+        const rendererWithCS = gl as unknown as { outputColorSpace?: number };
+        if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
+          const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
+          rendererWithCS.outputColorSpace = SRGB as number;
+        }
+        // Note: outputEncoding/gammaFactor are deprecated — intentionally not used.
       }}
       style={{ width: '100%', height: '100%' }}>
-      <DotsGrid spacing={0.5} baseOpacity={0.8} brightness={0.6} />
+      <DotsGrid spacing={0.4} baseOpacity={0.7} brightness={0.9} />
     </Canvas>
   );
 }

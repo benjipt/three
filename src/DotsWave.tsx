@@ -1,4 +1,5 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -8,7 +9,7 @@ interface DotsWaveProps {
   brightness?: number;
 }
 
-function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsWaveProps) {
+function DotsGrid({ spacing = 0.6, brightness = 0.9 }: DotsWaveProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const { viewport } = useThree();
 
@@ -119,7 +120,7 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
         const disp = Math.sin(phase) * localAmp;
         positions[index + 2] = disp;
 
-        if (colors) {
+          if (colors) {
           // Crest mask (smoothstep-like)
           const absD = Math.abs(disp);
           const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
@@ -136,6 +137,11 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
           r = r * (1 - fogFactor) + fogColor[0] * fogFactor;
           g = g * (1 - fogFactor) + fogColor[1] * fogFactor;
           b = b * (1 - fogFactor) + fogColor[2] * fogFactor;
+
+          // Apply brightness multiplier directly to the per-vertex color
+          r = r * brightness;
+          g = g * brightness;
+          b = b * brightness;
 
           colors[index] = r;
           colors[index + 1] = g;
@@ -160,6 +166,8 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
       pointsRef.current.geometry.attributes.size.needsUpdate = true;
   });
 
+  // Note: opacity is controlled via Canvas CSS in the parent for immediate visual response.
+
   return (
     <points ref={pointsRef} geometry={geometry}>
       <shaderMaterial
@@ -179,18 +187,15 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
         fragmentShader={
           `precision mediump float;
            varying vec3 vColor;
-           uniform float uOpacity;
-           uniform float uBrightness;
            void main() {
              vec2 coord = gl_PointCoord - vec2(0.5);
              float r = length(coord);
              float alpha = 1.0 - smoothstep(0.45, 0.5, r);
              if (alpha < 0.01) discard;
-             vec3 col = vColor * uBrightness;
-             gl_FragColor = vec4(col, alpha * uOpacity);
+             gl_FragColor = vec4(vColor, alpha);
            }`
         }
-        uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 }, uOpacity: { value: baseOpacity }, uBrightness: { value: brightness } }}
+        uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 } }}
         transparent
         depthWrite={false}
       />
@@ -198,12 +203,105 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
   );
 }
 
+
 export function DotsWave() {
+  const [baseOpacity, setBaseOpacity] = useState(0.78);
+  const [brightness, setBrightness] = useState(0.75);
+
+  const controlPanelStyle: CSSProperties = {
+    position: 'absolute',
+    top: 12,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'rgba(8, 6, 6, 0.45)',
+    padding: '8px 12px',
+    borderRadius: 10,
+    display: 'flex',
+    gap: 12,
+    alignItems: 'center',
+    backdropFilter: 'blur(6px)',
+    zIndex: 10,
+    fontFamily: 'Inter, Arial, sans-serif',
+  };
+
+  const controlRowStyle: CSSProperties = {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+  };
+
+  const labelStyle: CSSProperties = {
+    color: '#fff',
+    fontSize: 12,
+    minWidth: 60,
+  };
+
+  const inputStyle: CSSProperties = {
+    width: 160,
+  };
+
+  const numberStyle: CSSProperties = {
+    width: 60,
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    color: '#fff',
+    padding: '4px 6px',
+    borderRadius: 6,
+  };
+
   return (
-    <Canvas
-      camera={{ position: [0, 40, 10], far: 1000 }}
-      style={{ width: '100%', height: '100%' }}>
-      <DotsGrid spacing={0.5} baseOpacity={1.0} brightness={0.25} />
-    </Canvas>
+    <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+      <Canvas
+        camera={{ position: [0, 40, 10], far: 1000 }}
+        style={{ width: '100%', height: '100%', opacity: baseOpacity }}>
+        <DotsGrid spacing={0.5} brightness={brightness} />
+      </Canvas>
+
+      <div style={controlPanelStyle}>
+        <div style={controlRowStyle}>
+          <label style={labelStyle}>Opacity</label>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={baseOpacity}
+            onChange={(e) => setBaseOpacity(parseFloat(e.target.value))}
+            style={inputStyle}
+          />
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.01}
+            value={baseOpacity}
+            onChange={(e) => setBaseOpacity(parseFloat(e.target.value) || 0)}
+            style={numberStyle}
+          />
+        </div>
+
+        <div style={controlRowStyle}>
+          <label style={labelStyle}>Brightness</label>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.01}
+            value={brightness}
+            onChange={(e) => setBrightness(parseFloat(e.target.value))}
+            style={inputStyle}
+          />
+          <input
+            type="number"
+            min={0}
+            max={2}
+            step={0.01}
+            value={brightness}
+            onChange={(e) => setBrightness(parseFloat(e.target.value) || 0)}
+            style={numberStyle}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

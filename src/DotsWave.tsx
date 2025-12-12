@@ -2,6 +2,13 @@ import { useRef, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
+// Deterministic pseudo-random hash function (stable per boid)
+function hashBoid(laneIdx: number, boidIdx: number): number {
+  const seed = laneIdx * 73856093 ^ boidIdx * 19349663;
+  const x = Math.sin(seed) * 43758.5453;
+  return x - Math.floor(x); // returns 0-1
+}
+
 interface DotsWaveProps {
   spacing?: number;
   baseOpacity?: number;
@@ -79,13 +86,13 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
     const boidInfluenceSigmaX = 5.5; // horizontal falloff
     const boidInfluenceSigmaY = 1.6; // vertical falloff
     const boidAmp = 0.8; // how strongly a boid boosts local amplitude
-    
-    // Ramp up boid influence gradually over first 2 seconds to avoid startup burst
-    const boidRampTime = 2.0;
-    const boidRamp = Math.min(1.0, time / boidRampTime);
 
     // Small global drift to avoid stationary repetition
     const drift = Math.sin(time * 0.05) * 4.0;
+
+    // Ramp up boid influence gradually over first 2 seconds to avoid startup burst
+    const boidRampTime = 2.0;
+    const boidRamp = Math.min(1.0, time / boidRampTime);
 
     // Crest color burn + Depth fog band variables
     const accent = [1.0, 0.65, 0.18]; // warm accent (orange)
@@ -109,15 +116,21 @@ function DotsGrid({ spacing = 0.6, baseOpacity = 0.85, brightness = 0.9 }: DotsW
         for (let li = 0; li < lanes.length; li++) {
           const laneY = lanes[li] + Math.sin(time * 0.25 + lanePhase[li]) * 0.8; // gentle wiggle
           for (let bi = 0; bi < boidCountPerLane; bi++) {
-            // Boid X center moves LR with spacing; stagger with lane index and bi
-            let boidCenterX = -40 + drift + (bi * boidSpacingX) + time * (speed * 12) + li * 3.0;
+            // Deterministic random properties per boid
+            const boidHash = hashBoid(li, bi);
+            const boidSpeedVar = 0.8 + boidHash * 0.4; // speed varies 0.8x to 1.2x
+            const boidPhaseOffset = boidHash * Math.PI * 2; // random phase offset for re-entry timing
+            const boidSigmaVar = 0.7 + boidHash * 0.6; // shape varies 0.7x to 1.3x
+            
+            // Boid X center moves LR with variable speed and phase offset for varied timing
+            let boidCenterX = -40 + drift + (bi * boidSpacingX) + time * (speed * 12 * boidSpeedVar) + li * 3.0 + boidPhaseOffset;
             // Wrap boids horizontally so they loop continuously (viewport width ~80)
             boidCenterX = boidCenterX % 160 - 80; // Wrap within visible range
             const dx = posX - boidCenterX;
             const dy = posY - laneY;
-            const gx = Math.exp(-(dx * dx) / (2 * boidInfluenceSigmaX * boidInfluenceSigmaX));
-            const gy = Math.exp(-(dy * dy) / (2 * boidInfluenceSigmaY * boidInfluenceSigmaY));
-            const influence = gx * gy; // elliptical Gaussian envelope
+            const gx = Math.exp(-(dx * dx) / (2 * boidInfluenceSigmaX * boidInfluenceSigmaX * boidSigmaVar));
+            const gy = Math.exp(-(dy * dy) / (2 * boidInfluenceSigmaY * boidInfluenceSigmaY * boidSigmaVar));
+            const influence = gx * gy; // elliptical Gaussian envelope with variable shape
             localAmp += baseAmp * boidAmp * influence * boidRamp; // Apply ramp-in factor
           }
         }

@@ -30,6 +30,14 @@ Examples from this repo:
 - `perf[DotsWave]: smooth boids at entry and exit`
 - `fix[App]: correct canvas sizing`
 
+## Code Priorities
+
+When generating code, prioritize in this order:
+
+1. **Performance** - Optimize for speed and efficiency
+2. **DRY** - Use single-responsibility functions with clear names, when appropriate
+3. **Readability** - Code should be easy to understand
+
 ## Architecture
 
 ### Core Stack

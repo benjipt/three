@@ -2,12 +2,135 @@ import { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// Deterministic pseudo-random hash function (stable per boid)
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+// Wave parameters
+const WAVE_SPEED = 1.2;
+const BASE_AMPLITUDE = 3.6;
+const CARRIER_FREQ = 0.16;
+
+// Boid parameters
+const BOID_LANES = [-6.0, -2.0, 2.0, 6.0];
+const BOID_LANE_PHASES = BOID_LANES.map((_, i) => i * 3.6);
+const BOIDS_PER_LANE = 3;
+const BOID_SPACING_X = 20.0;
+const BOID_SIGMA_X = 5.5;
+const BOID_SIGMA_Y = 1.6;
+const BOID_AMP = 0.8;
+const BOID_RAMP_DURATION = 2.0;
+
+// Boid edge fade
+const BOID_EDGE_FADE_ZONE = 15.0;
+const BOID_LEFT_EDGE = -80;
+const BOID_RIGHT_EDGE = 80;
+
+// Color values (linear space)
+const BASE_COLOR = { r: 220 / 255, g: 106 / 255, b: 163 / 255 };
+const ACCENT_COLOR = { r: 1.0, g: 0.65, b: 0.18 };
+const FOG_COLOR = { r: 0.06, g: 0.04, b: 0.03 };
+
+// Color thresholds (relative to BASE_AMPLITUDE)
+const BURN_THRESHOLD = BASE_AMPLITUDE * 0.35;
+const BURN_RANGE = BASE_AMPLITUDE * 0.9;
+const FOG_START = BASE_AMPLITUDE * 0.85;
+const FOG_RANGE = BASE_AMPLITUDE * 0.6;
+
+// Size parameters
+const BASE_PIXEL_SIZE = 1.2;
+const SIZE_BOOST = 1.8;
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Deterministic pseudo-random hash function (stable per boid)
+ */
 function hashBoid(laneIdx: number, boidIdx: number): number {
   const seed = laneIdx * 73856093 ^ boidIdx * 19349663;
   const x = Math.sin(seed) * 43758.5453;
-  return x - Math.floor(x); // returns 0-1
+  return x - Math.floor(x);
 }
+
+/**
+ * Calculate aggregate boid influence at a given position
+ */
+function calculateBoidInfluence(
+  posX: number,
+  posY: number,
+  time: number,
+  boidRamp: number
+): number {
+  const drift = Math.sin(time * 0.05) * 2.0;
+  let totalInfluence = 0;
+
+  for (let li = 0; li < BOID_LANES.length; li++) {
+    const laneY = BOID_LANES[li] + Math.sin(time * 0.25 + BOID_LANE_PHASES[li]) * 0.8;
+
+    for (let bi = 0; bi < BOIDS_PER_LANE; bi++) {
+      const boidHash = hashBoid(li, bi);
+      const boidSpeedVar = 0.8 + boidHash * 0.4;
+      const boidPhaseOffset = boidHash * Math.PI * 2;
+      const boidSigmaVar = 0.7 + boidHash * 0.6;
+
+      // Boid X center with wrapping
+      let boidCenterX =
+        -40 + drift + bi * BOID_SPACING_X + time * (WAVE_SPEED * 12 * boidSpeedVar) + li * 3.0 + boidPhaseOffset;
+      boidCenterX = ((boidCenterX % 160) + 160) % 160 - 80;
+
+      // Edge fade for smooth entry/exit
+      let edgeFade = 1.0;
+      if (boidCenterX < BOID_LEFT_EDGE + BOID_EDGE_FADE_ZONE) {
+        edgeFade = Math.max(0, (boidCenterX - BOID_LEFT_EDGE) / BOID_EDGE_FADE_ZONE);
+      } else if (boidCenterX > BOID_RIGHT_EDGE - BOID_EDGE_FADE_ZONE) {
+        edgeFade = Math.max(0, (BOID_RIGHT_EDGE - boidCenterX) / BOID_EDGE_FADE_ZONE);
+      }
+
+      // Gaussian falloff
+      const dx = posX - boidCenterX;
+      const dy = posY - laneY;
+      const gx = Math.exp(-(dx * dx) / (2 * BOID_SIGMA_X * BOID_SIGMA_X * boidSigmaVar));
+      const gy = Math.exp(-(dy * dy) / (2 * BOID_SIGMA_Y * BOID_SIGMA_Y * boidSigmaVar));
+
+      totalInfluence += gx * gy * edgeFade;
+    }
+  }
+
+  return BASE_AMPLITUDE * BOID_AMP * totalInfluence * boidRamp;
+}
+
+/**
+ * Calculate dot color and size based on displacement
+ */
+function calculateDotAppearance(displacement: number): { r: number; g: number; b: number; size: number } {
+  const absDisp = Math.abs(displacement);
+
+  // Crest factor (0 at base, 1 at full displacement)
+  const crest = Math.max(0, Math.min(1, (absDisp - BURN_THRESHOLD) / BURN_RANGE));
+
+  // Interpolate base -> accent based on crest
+  let r = BASE_COLOR.r * (1 - crest) + ACCENT_COLOR.r * crest;
+  let g = BASE_COLOR.g * (1 - crest) + ACCENT_COLOR.g * crest;
+  let b = BASE_COLOR.b * (1 - crest) + ACCENT_COLOR.b * crest;
+
+  // Subtle fog at extreme crests
+  let fogFactor = Math.max(0, Math.min(1, (absDisp - FOG_START) / FOG_RANGE));
+  fogFactor = Math.pow(fogFactor, 1.5) * 0.35;
+  r = r * (1.0 - fogFactor) + FOG_COLOR.r * fogFactor;
+  g = g * (1.0 - fogFactor) + FOG_COLOR.g * fogFactor;
+  b = b * (1.0 - fogFactor) + FOG_COLOR.b * fogFactor;
+
+  // Size modulation
+  const size = BASE_PIXEL_SIZE * (1 + crest * SIZE_BOOST);
+
+  return { r, g, b, size };
+}
+
+// =============================================================================
+// COMPONENTS
+// =============================================================================
 
 interface DotsWaveProps {
   spacing?: number;
@@ -20,23 +143,14 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const { viewport, gl } = useThree();
 
-  // Mobile detection state with responsive update
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check if viewport is mobile-sized
     const checkIsMobile = () => {
-      const mobileBreakpoint = 768; // Standard mobile breakpoint in pixels
-      setIsMobile(window.innerWidth < mobileBreakpoint);
+      setIsMobile(window.innerWidth < 768);
     };
-
-    // Initial check
     checkIsMobile();
-
-    // Listen for window resize events to update state
     window.addEventListener('resize', checkIsMobile);
-
-    // Cleanup listener on unmount
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
@@ -45,41 +159,32 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
     const colors: number[] = [];
     const sizes: number[] = [];
 
-    // Base color in sRGB, convert to linear for accurate rendering
     const baseColor = new THREE.Color('#DC6AA3');
     baseColor.convertSRGBToLinear();
-    const baseR = baseColor.r;
-    const baseG = baseColor.g;
-    const baseB = baseColor.b;
 
-    // Calculate grid dimensions based on viewport, with extra padding to hide edges
-    const padding = isMobile ? 15 : 30; // Extra dots beyond viewport edges to hide wave boundaries
+    const padding = isMobile ? 15 : 30;
     const width = Math.ceil(viewport.width / spacing) + padding * 2;
-    // Grid height: make visible column spacing be 5% of viewport height
     const visibleGridHeight = viewport.height * 0.05;
     const height = Math.ceil(visibleGridHeight / spacing) + padding * 2;
 
-    // Taper settings: pronounced compression at edges (vertical rows only)
-    const edgeScale = 0.06; // 94% compression near edges (more pronounced)
-    const taperPower = 1.1; // extends taper influence further toward center
+    const edgeScale = 0.06;
+    const taperPower = 1.1;
 
-    // Create a grid of points
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const posX = (x - width / 2) * spacing;
         let posY = (y - height / 2) * spacing;
-        const posZ = 0;
 
-        // Static taper: compress vertical spacing near left/right edges, uniform columns
+        // Vertical taper near edges
         const halfWidthUnits = (width / 2) * spacing;
-        const nx = Math.max(0, Math.min(1, Math.abs(posX) / halfWidthUnits)); // 0 center -> 1 edges
-        const spread = 1.0 - Math.pow(nx, taperPower); // more spread in middle
-        const scaleY = edgeScale + (1.0 - edgeScale) * spread; // edge->edgeScale, center->1.0
+        const nx = Math.max(0, Math.min(1, Math.abs(posX) / halfWidthUnits));
+        const spread = 1.0 - Math.pow(nx, taperPower);
+        const scaleY = edgeScale + (1.0 - edgeScale) * spread;
         posY *= scaleY;
 
-        positions.push(posX, posY, posZ);
-        colors.push(baseR, baseG, baseB);
-        sizes.push(1.2); // initial pixel size per point
+        positions.push(posX, posY, 0);
+        colors.push(baseColor.r, baseColor.g, baseColor.b);
+        sizes.push(BASE_PIXEL_SIZE);
       }
     }
 
@@ -91,153 +196,61 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
     return { geometry: geom, gridWidth: width, gridHeight: height };
   }, [viewport.width, viewport.height, spacing, isMobile]);
 
-  // Animate the wave
   useFrame(({ clock }) => {
     if (!pointsRef.current) return;
 
-    const positions = pointsRef.current.geometry.attributes.position
-      .array as Float32Array;
-    const colors =
-      (pointsRef.current.geometry.attributes.color?.array as Float32Array) ?? null;
-    const sizes =
-      (pointsRef.current.geometry.attributes.size?.array as Float32Array) ?? null;
+    const positions = pointsRef.current.geometry.attributes.position.array as Float32Array;
+    const colors = pointsRef.current.geometry.attributes.color?.array as Float32Array | null;
+    const sizes = pointsRef.current.geometry.attributes.size?.array as Float32Array | null;
+
     const time = clock.getElapsedTime();
-    // Envelope Boids
-    // A fixed-speed left-to-right carrier whose local amplitude is shaped
-    // by a set of moving envelopes ("boids") that fly in lanes across X,
-    // influencing nearby points with smooth falloff. Displacement is z-only.
-    const speed = 1.2; // consistent LR speed
-    const baseAmp = 3.6; // overall vertical displacement scale
-    const carrierFreq = 0.16; // spatial frequency along X
-
-    // Boid lanes (Y positions) and initial phases
-    const lanes = [-6.0, -2.0, 2.0, 6.0];
-    const lanePhase = lanes.map((_, i) => i * 3.6);
-
-    // Each boid moves left-to-right with slight lane wiggle
-    const boidCountPerLane = 3;
-    const boidSpacingX = 20.0; // separation along X
-    const boidInfluenceSigmaX = 5.5; // horizontal falloff
-    const boidInfluenceSigmaY = 1.6; // vertical falloff
-    const boidAmp = 0.8; // how strongly a boid boosts local amplitude
-
-    // Small global drift to avoid stationary repetition
-    const drift = Math.sin(time * 0.05) * 2.0;
-
-    // Ramp up boid influence gradually over first 2 seconds to avoid startup burst
-    const boidRampTime = 2.0;
-    const boidRamp = Math.min(1.0, time / boidRampTime);
-
-    // Crest color burn + Depth fog band variables
-    const accent = [1.0, 0.65, 0.18]; // warm accent (orange)
-    const fogColor = [0.06, 0.04, 0.03]; // dark fog tint
-    const burnThreshold = baseAmp * 0.35; // displacement at which accent begins
-    const burnRange = baseAmp * 0.9; // span of accent ramp
-    // Make fog subtle: only at extreme peaks, with gentle curve
-    const fogStart = baseAmp * 0.85; // later start -> fewer points receive fog
-    const fogRange = baseAmp * 0.6; // narrower range -> quicker falloff
+    const boidRamp = Math.min(1.0, time / BOID_RAMP_DURATION);
+    const baseLocalAmp = BASE_AMPLITUDE * 0.6;
 
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
         const index = (y * gridWidth + x) * 3;
-
         const posX = positions[index];
         const posY = positions[index + 1];
-        // Base carrier wave (LR motion)
-        const phase = posX * carrierFreq - time * speed;
-        let localAmp = baseAmp * 0.6; // baseline amplitude everywhere
 
-        // Aggregate influence from boids across all lanes
-        for (let li = 0; li < lanes.length; li++) {
-          const laneY = lanes[li] + Math.sin(time * 0.25 + lanePhase[li]) * 0.8; // gentle wiggle
-          for (let bi = 0; bi < boidCountPerLane; bi++) {
-            // Deterministic random properties per boid
-            const boidHash = hashBoid(li, bi);
-            const boidSpeedVar = 0.8 + boidHash * 0.4; // speed varies 0.8x to 1.2x
-            const boidPhaseOffset = boidHash * Math.PI * 2; // random phase offset for re-entry timing
-            const boidSigmaVar = 0.7 + boidHash * 0.6; // shape varies 0.7x to 1.3x
-            
-            // Boid X center moves LR with variable speed and phase offset for varied timing
-            let boidCenterX = -40 + drift + (bi * boidSpacingX) + time * (speed * 12 * boidSpeedVar) + li * 3.0 + boidPhaseOffset;
-            // Wrap boids horizontally so they loop continuously (viewport width ~80)
-            boidCenterX = boidCenterX % 160 - 80; // Wrap within visible range
-            
-            // Smooth fade-in/fade-out near edges to avoid abrupt entry/exit
-            const edgeFadeZone = 15.0; // distance from edge to start fading
-            const leftEdge = -80;
-            const rightEdge = 80;
-            let edgeFade = 1.0;
-            if (boidCenterX < leftEdge + edgeFadeZone) {
-              // Fade in from left
-              edgeFade = Math.max(0, (boidCenterX - leftEdge) / edgeFadeZone);
-            } else if (boidCenterX > rightEdge - edgeFadeZone) {
-              // Fade out toward right
-              edgeFade = Math.max(0, (rightEdge - boidCenterX) / edgeFadeZone);
-            }
-            
-            const dx = posX - boidCenterX;
-            const dy = posY - laneY;
-            const gx = Math.exp(-(dx * dx) / (2 * boidInfluenceSigmaX * boidInfluenceSigmaX * boidSigmaVar));
-            const gy = Math.exp(-(dy * dy) / (2 * boidInfluenceSigmaY * boidInfluenceSigmaY * boidSigmaVar));
-            const influence = gx * gy * edgeFade; // Apply edge fade to smooth entry/exit
-            localAmp += baseAmp * boidAmp * influence * boidRamp; // Apply ramp-in factor
-          }
-        }
+        // Wave phase and amplitude
+        const phase = posX * CARRIER_FREQ - time * WAVE_SPEED;
+        const boidInfluence = calculateBoidInfluence(posX, posY, time, boidRamp);
+        const localAmp = baseLocalAmp + boidInfluence;
 
-        // Final vertical displacement: carrier modulated by envelope boids
-        const disp = Math.sin(phase) * localAmp;
-        positions[index + 2] = disp;
+        // Displacement
+        const displacement = Math.sin(phase) * localAmp;
+        positions[index + 2] = displacement;
 
+        // Appearance
+        const appearance = calculateDotAppearance(displacement);
         if (colors) {
-          // Crest mask (smoothstep-like)
-          const absD = Math.abs(disp);
-          const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
-          // interpolate base -> accent based on crest
-          const baseR = 220 / 255;
-          const baseG = 106 / 255;
-          const baseB = 163 / 255;
-          let r = baseR * (1 - crest) + accent[0] * crest;
-          let g = baseG * (1 - crest) + accent[1] * crest;
-          let b = baseB * (1 - crest) + accent[2] * crest;
-
-          // Subtle fog band at extreme crests only
-          let fogFactor = Math.max(0, Math.min(1, (absD - fogStart) / fogRange));
-          // Ease-in curve and cap intensity to keep it subtle
-          fogFactor = Math.pow(fogFactor, 1.5) * 0.35; // max ~35% blend
-          r = r * (1.0 - fogFactor) + fogColor[0] * fogFactor;
-          g = g * (1.0 - fogFactor) + fogColor[1] * fogFactor;
-          b = b * (1.0 - fogFactor) + fogColor[2] * fogFactor;
-
-          colors[index] = r;
-          colors[index + 1] = g;
-          colors[index + 2] = b;
+          colors[index] = appearance.r;
+          colors[index + 1] = appearance.g;
+          colors[index + 2] = appearance.b;
         }
-
         if (sizes) {
-          // Make subtle size modulation based on crest (bigger for crests)
-          const basePixel = 1.2; // baseline pixel size
-          const sizeBoost = 1.8; // maximum extra multiplier for crests
-          const absD = Math.abs(disp);
-          const crest = Math.max(0, Math.min(1, (absD - burnThreshold) / burnRange));
-          sizes[index / 3] = basePixel * (1 + crest * sizeBoost);
+          sizes[index / 3] = appearance.size;
         }
       }
     }
 
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
-    if (pointsRef.current.geometry.attributes.color)
+    if (pointsRef.current.geometry.attributes.color) {
       pointsRef.current.geometry.attributes.color.needsUpdate = true;
-    if (pointsRef.current.geometry.attributes.size)
+    }
+    if (pointsRef.current.geometry.attributes.size) {
       pointsRef.current.geometry.attributes.size.needsUpdate = true;
+    }
 
-    // Update uniforms for DPR and brightness parity on non-retina
+    // Update shader uniforms
     if (matRef.current?.uniforms) {
+      const dpr = gl.getPixelRatio();
       if (matRef.current.uniforms.uPixelRatio) {
-        matRef.current.uniforms.uPixelRatio.value = gl.getPixelRatio();
+        matRef.current.uniforms.uPixelRatio.value = dpr;
       }
       if (matRef.current.uniforms.uBrightness) {
-        const dpr = gl.getPixelRatio();
-        const boost = dpr < 1.5 ? 1.08 : 1.0; // subtle brightness lift on standard displays
+        const boost = dpr < 1.5 ? 1.08 : 1.0;
         matRef.current.uniforms.uBrightness.value = (brightness ?? 1.0) * boost;
       }
     }
@@ -246,34 +259,37 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
   return (
     <points ref={pointsRef} geometry={geometry}>
       <shaderMaterial
-        vertexShader={
-          `attribute float size;
-           attribute vec3 color;
-           varying vec3 vColor;
-           uniform float uPixelRatio;
-           void main() {
-             vColor = color;
-             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-             gl_Position = projectionMatrix * mvPosition;
-             // Keep points a consistent screen size
-             gl_PointSize = max(1.0, size * uPixelRatio);
-           }`
-        }
-        fragmentShader={
-          `precision mediump float;
-           varying vec3 vColor;
-           uniform float uOpacity;
-           uniform float uBrightness;
-           void main() {
-             vec2 coord = gl_PointCoord - vec2(0.5);
-             float r = length(coord);
-             float alpha = 1.0 - smoothstep(0.45, 0.5, r);
-             if (alpha < 0.01) discard;
-             vec3 col = vColor * uBrightness;
-             gl_FragColor = vec4(col, alpha * uOpacity);
-           }`
-        }
-        uniforms={{ uPixelRatio: { value: window.devicePixelRatio || 1 }, uOpacity: { value: baseOpacity }, uBrightness: { value: brightness } }}
+        vertexShader={`
+          attribute float size;
+          attribute vec3 color;
+          varying vec3 vColor;
+          uniform float uPixelRatio;
+          void main() {
+            vColor = color;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            gl_PointSize = max(1.0, size * uPixelRatio);
+          }
+        `}
+        fragmentShader={`
+          precision mediump float;
+          varying vec3 vColor;
+          uniform float uOpacity;
+          uniform float uBrightness;
+          void main() {
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            float r = length(coord);
+            float alpha = 1.0 - smoothstep(0.45, 0.5, r);
+            if (alpha < 0.01) discard;
+            vec3 col = vColor * uBrightness;
+            gl_FragColor = vec4(col, alpha * uOpacity);
+          }
+        `}
+        uniforms={{
+          uPixelRatio: { value: window.devicePixelRatio || 1 },
+          uOpacity: { value: baseOpacity },
+          uBrightness: { value: brightness },
+        }}
         ref={matRef}
         transparent
         depthWrite={false}
@@ -287,23 +303,22 @@ export function DotsWave() {
     <Canvas
       camera={{ position: [0, 50, 20], far: 1000 }}
       gl={{
-        antialias: true, // MSAA is cheap on modern hardware; more efficient than post-process AA
-        preserveDrawingBuffer: false, // Disabled unless needed for canvas capture
-        alpha: false, // No transparency in the canvas itself; handled in shaders
-        stencil: false, // Not needed for our scene
-        depth: true, // We use depth for perspective
-        powerPreference: 'high-performance', // Prefer high-performance GPU on multi-GPU systems
+        antialias: true,
+        preserveDrawingBuffer: false,
+        alpha: false,
+        stencil: false,
+        depth: true,
+        powerPreference: 'high-performance',
       }}
       onCreated={({ gl }) => {
-        // Prefer SRGB color space for near-accurate colors when supported
         const rendererWithCS = gl as unknown as { outputColorSpace?: number };
         if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
           const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
           rendererWithCS.outputColorSpace = SRGB as number;
         }
-        // Note: outputEncoding/gammaFactor are deprecated — intentionally not used.
       }}
-      style={{ width: '100%', height: '100%' }}>
+      style={{ width: '100%', height: '100%' }}
+    >
       <DotsGrid spacing={0.4} baseOpacity={0.7} brightness={0.9} />
     </Canvas>
   );

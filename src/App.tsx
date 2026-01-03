@@ -4,8 +4,8 @@ import { DotsWave } from './DotsWave'
 function App() {
   return (
     <div className="container">
-      <DotsWave height='220px' />
-      {/* <DotsWave /> */}
+      {/* <DotsWave height='240px' /> */}
+      <DotsWave />
     </div>
   )
 }

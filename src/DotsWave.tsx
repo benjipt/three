@@ -1,6 +1,7 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { SRGBColorSpace } from 'three';
 
 // =============================================================================
 // CONSTANTS
@@ -335,20 +336,16 @@ const GL_CONFIG = {
 const DOTS_GRID_PROPS = { spacing: 0.4, baseOpacity: 0.7, brightness: 0.9 };
 
 function handleCanvasCreated({ gl }: { gl: THREE.WebGLRenderer }) {
-  const rendererWithCS = gl as unknown as { outputColorSpace?: number };
-  if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
-    const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
-    rendererWithCS.outputColorSpace = SRGB as number;
-  }
+  gl.outputColorSpace = SRGBColorSpace;
 }
 
 export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
-  // For fixed heights, use CSS clipping approach
-  const isFixedHeight = height !== '100%';
+  // Validate height prop: must be '100%' or a valid pixel value like '240px'
+  const isValidPixelHeight = height !== '100%' && height !== '' && /^\d+/.test(height);
 
-  if (isFixedHeight) {
+  if (isValidPixelHeight) {
     // Parse and coerce height to minimum to avoid clipping wave peaks
-    const parsedHeight = parseInt(height, 10) || INTERNAL_RENDER_HEIGHT;
+    const parsedHeight = parseInt(height, 10);
     const targetHeight = Math.max(parsedHeight, MIN_RECOMMENDED_HEIGHT);
 
     // Offset to center the wave (wave is centered in the internal render)

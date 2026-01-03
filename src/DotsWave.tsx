@@ -138,6 +138,7 @@ interface DotsWaveProps {
   brightness?: number;
 }
 
+
 function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: DotsWaveProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
@@ -164,7 +165,9 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
 
     const padding = isMobile ? 15 : 30;
     const width = Math.ceil(viewport.width / spacing) + padding * 2;
-    const visibleGridHeight = viewport.height * 0.05;
+    // Larger multiplier on mobile to make wave more prominent in taller viewport
+    const heightMultiplier = isMobile ? 0.065 : 0.05;
+    const visibleGridHeight = viewport.height * heightMultiplier;
     const height = Math.ceil(visibleGridHeight / spacing) + padding * 2;
 
     const edgeScale = 0.06;
@@ -298,7 +301,65 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
   );
 }
 
-export function DotsWave() {
+interface DotsWaveContainerProps {
+  height?: string;
+}
+
+// Internal render height for consistent visual (wave centered at this height)
+// Must be large enough to match typical desktop viewport for proper wave amplitude
+const INTERNAL_RENDER_HEIGHT = 900;
+
+export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
+  // For fixed heights, use CSS clipping approach
+  const isFixedHeight = height !== '100%';
+
+  if (isFixedHeight) {
+    // Parse the target height
+    const targetHeight = parseInt(height, 10) || INTERNAL_RENDER_HEIGHT;
+    // Offset to center the wave (wave is centered in the internal render)
+    const offset = (INTERNAL_RENDER_HEIGHT - targetHeight) / 2;
+
+    return (
+      <div style={{
+        width: '100%',
+        height,
+        overflow: 'hidden',
+        position: 'relative'
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: -offset,
+          left: 0,
+          width: '100%',
+          height: INTERNAL_RENDER_HEIGHT,
+        }}>
+          <Canvas
+            camera={{ position: [0, 50, 20], far: 1000 }}
+            gl={{
+              antialias: true,
+              preserveDrawingBuffer: false,
+              alpha: false,
+              stencil: false,
+              depth: true,
+              powerPreference: 'high-performance',
+            }}
+            onCreated={({ gl }) => {
+              const rendererWithCS = gl as unknown as { outputColorSpace?: number };
+              if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
+                const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
+                rendererWithCS.outputColorSpace = SRGB as number;
+              }
+            }}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <DotsGrid spacing={0.4} baseOpacity={0.7} brightness={0.9} />
+          </Canvas>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: full viewport rendering (original behavior)
   return (
     <Canvas
       camera={{ position: [0, 50, 20], far: 1000 }}

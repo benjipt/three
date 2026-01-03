@@ -302,6 +302,12 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
 }
 
 interface DotsWaveContainerProps {
+  /**
+   * Height of the wave container. Accepts CSS height values.
+   * - Use '100%' (default) for full viewport height
+   * - Use fixed values like '220px' for constrained layouts
+   * - Minimum: 220px - values below this are coerced up to prevent clipping wave peaks
+   */
   height?: string;
 }
 
@@ -309,20 +315,25 @@ interface DotsWaveContainerProps {
 // Must be large enough to match typical desktop viewport for proper wave amplitude
 const INTERNAL_RENDER_HEIGHT = 900;
 
+// Minimum recommended height to avoid clipping wave peaks during boid animations
+// Heights below this may clip the top or bottom of the wave at peak amplitude
+const MIN_RECOMMENDED_HEIGHT = 220;
+
 export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
   // For fixed heights, use CSS clipping approach
   const isFixedHeight = height !== '100%';
 
   if (isFixedHeight) {
-    // Parse the target height
-    const targetHeight = parseInt(height, 10) || INTERNAL_RENDER_HEIGHT;
+    // Parse and coerce height to minimum to avoid clipping wave peaks
+    const parsedHeight = parseInt(height, 10) || INTERNAL_RENDER_HEIGHT;
+    const targetHeight = Math.max(parsedHeight, MIN_RECOMMENDED_HEIGHT);
     // Offset to center the wave (wave is centered in the internal render)
     const offset = (INTERNAL_RENDER_HEIGHT - targetHeight) / 2;
 
     return (
       <div style={{
         width: '100%',
-        height,
+        height: targetHeight,
         overflow: 'hidden',
         position: 'relative'
       }}>

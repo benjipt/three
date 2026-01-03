@@ -303,21 +303,44 @@ function DotsGrid({ spacing = 0.01, baseOpacity = 0.85, brightness = 0.9 }: Dots
 
 interface DotsWaveContainerProps {
   /**
-   * Height of the wave container. Accepts CSS height values.
+   * Height of the wave container.
    * - Use '100%' (default) for full viewport height
-   * - Use fixed values like '220px' for constrained layouts
-   * - Minimum: 220px - values below this are coerced up to prevent clipping wave peaks
+   * - Use pixel values like '240px' for constrained layouts
+   * - Other CSS units (vh, rem, calc, etc.) are NOT supported
+   * - Minimum: 240px - values below this are coerced up to prevent clipping wave peaks
    */
   height?: string;
 }
 
-// Internal render height for consistent visual (wave centered at this height)
-// Must be large enough to match typical desktop viewport for proper wave amplitude
+// PERFORMANCE NOTE: Fixed-height mode renders at 900px internally (regardless of
+// target height) to maintain correct wave amplitude via viewport.height calculations.
+// This is ~4x overhead for 240px targets. The trade-off is necessary because the
+// perspective camera's visible world-space depends on canvas pixel height.
 const INTERNAL_RENDER_HEIGHT = 900;
 
-// Minimum recommended height to avoid clipping wave peaks during boid animations
-// Heights below this may clip the top or bottom of the wave at peak amplitude
-const MIN_RECOMMENDED_HEIGHT = 220;
+// Minimum height to avoid clipping wave peaks during boid animations.
+// Heights below this are silently coerced up.
+const MIN_RECOMMENDED_HEIGHT = 240;
+
+// Shared Canvas configuration to avoid duplication
+const CAMERA_CONFIG = { position: [0, 50, 20] as const, far: 1000 };
+const GL_CONFIG = {
+  antialias: true,
+  preserveDrawingBuffer: false,
+  alpha: false,
+  stencil: false,
+  depth: true,
+  powerPreference: 'high-performance' as const,
+};
+const DOTS_GRID_PROPS = { spacing: 0.4, baseOpacity: 0.7, brightness: 0.9 };
+
+function handleCanvasCreated({ gl }: { gl: THREE.WebGLRenderer }) {
+  const rendererWithCS = gl as unknown as { outputColorSpace?: number };
+  if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
+    const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
+    rendererWithCS.outputColorSpace = SRGB as number;
+  }
+}
 
 export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
   // For fixed heights, use CSS clipping approach
@@ -327,13 +350,14 @@ export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
     // Parse and coerce height to minimum to avoid clipping wave peaks
     const parsedHeight = parseInt(height, 10) || INTERNAL_RENDER_HEIGHT;
     const targetHeight = Math.max(parsedHeight, MIN_RECOMMENDED_HEIGHT);
+
     // Offset to center the wave (wave is centered in the internal render)
     const offset = (INTERNAL_RENDER_HEIGHT - targetHeight) / 2;
 
     return (
       <div style={{
         width: '100%',
-        height: targetHeight,
+        height: `${targetHeight}px`,
         overflow: 'hidden',
         position: 'relative'
       }}>
@@ -345,25 +369,12 @@ export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
           height: INTERNAL_RENDER_HEIGHT,
         }}>
           <Canvas
-            camera={{ position: [0, 50, 20], far: 1000 }}
-            gl={{
-              antialias: true,
-              preserveDrawingBuffer: false,
-              alpha: false,
-              stencil: false,
-              depth: true,
-              powerPreference: 'high-performance',
-            }}
-            onCreated={({ gl }) => {
-              const rendererWithCS = gl as unknown as { outputColorSpace?: number };
-              if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
-                const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
-                rendererWithCS.outputColorSpace = SRGB as number;
-              }
-            }}
+            camera={CAMERA_CONFIG}
+            gl={GL_CONFIG}
+            onCreated={handleCanvasCreated}
             style={{ width: '100%', height: '100%' }}
           >
-            <DotsGrid spacing={0.4} baseOpacity={0.7} brightness={0.9} />
+            <DotsGrid {...DOTS_GRID_PROPS} />
           </Canvas>
         </div>
       </div>
@@ -373,25 +384,12 @@ export function DotsWave({ height = '100%' }: DotsWaveContainerProps) {
   // Default: full viewport rendering (original behavior)
   return (
     <Canvas
-      camera={{ position: [0, 50, 20], far: 1000 }}
-      gl={{
-        antialias: true,
-        preserveDrawingBuffer: false,
-        alpha: false,
-        stencil: false,
-        depth: true,
-        powerPreference: 'high-performance',
-      }}
-      onCreated={({ gl }) => {
-        const rendererWithCS = gl as unknown as { outputColorSpace?: number };
-        if (typeof rendererWithCS.outputColorSpace !== 'undefined') {
-          const SRGB = (THREE as unknown as { SRGBColorSpace?: number }).SRGBColorSpace ?? 3001;
-          rendererWithCS.outputColorSpace = SRGB as number;
-        }
-      }}
+      camera={CAMERA_CONFIG}
+      gl={GL_CONFIG}
+      onCreated={handleCanvasCreated}
       style={{ width: '100%', height: '100%' }}
     >
-      <DotsGrid spacing={0.4} baseOpacity={0.7} brightness={0.9} />
+      <DotsGrid {...DOTS_GRID_PROPS} />
     </Canvas>
   );
 }

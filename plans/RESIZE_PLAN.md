@@ -220,7 +220,7 @@ camera={{ position: [0, 50, 20], far: 1000 }}
 - **Render overhead**: Fixed-height mode renders at 900px internally even when displaying smaller heights
 - **Memory usage**: Higher than minimal canvas size, but necessary for correct wave amplitude
 - **Why 900px**: This matches typical desktop viewport height, ensuring `viewport.height` produces the same world-space dimensions as production
-- **Minimum height**: 220px recommended - heights below this may clip wave peaks during boid animations
+- **Minimum height**: 240px enforced - heights below this are coerced up to prevent wave clipping during boid animations
 
 ---
 
